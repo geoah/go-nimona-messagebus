@@ -104,9 +104,9 @@ func (p *EventBus) Send(oev *Event) error {
 		}
 
 		// don't send events to peple who have already ACKed
-		// if re.Ack == true {
-		// 	continue
-		// }
+		if re.Ack == true {
+			continue
+		}
 
 		// since right now we do everything in memory, copy the
 		// event so we don't share it between the various peers
