@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	mux "github.com/nimona/go-nimona-mux"
 	net "github.com/nimona/go-nimona-net"
@@ -38,7 +39,7 @@ func (eb *EventBus) HandleEvent(handler func(ev *Event) error) error {
 	return nil
 }
 
-func (eb *EventBus) streamHander(stream *mux.Stream) error {
+func (eb *EventBus) streamHander(protocolID string, stream io.ReadWriteCloser) error {
 	sr := bufio.NewReader(stream)
 	for {
 		line, err := sr.ReadString('\n')
