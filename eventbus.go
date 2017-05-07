@@ -8,18 +8,19 @@ import (
 
 	mux "github.com/nimona/go-nimona-mux"
 	net "github.com/nimona/go-nimona-net"
+	ps "github.com/nimona/go-nimona-peerstore"
 )
 
 type EventBus struct {
 	protocolID string
-	peer       net.Peer
+	peer       ps.Peer
 	network    net.Network
 	handlers   []func(ev *Event) error
 	events     map[string]*Event
 	streams    map[string]*mux.Stream
 }
 
-func New(protocolID string, network net.Network, peer net.Peer) (*EventBus, error) {
+func New(protocolID string, network net.Network, peer ps.Peer) (*EventBus, error) {
 	eb := &EventBus{
 		protocolID: protocolID,
 		network:    network,
@@ -93,14 +94,14 @@ func (p *EventBus) Send(oev *Event) error {
 		}
 	}
 
-	if re, err := oev.GetRecipient(p.peer.GetID()); err == nil {
+	if re, err := oev.GetRecipient(string(p.peer.GetID())); err == nil {
 		re.Ack = true
 	}
 
 	// go through all recipiends
 	for _, re := range oev.Recipients {
 		// don't send events to ourselves
-		if re.PeerID == p.peer.GetID() {
+		if re.PeerID == string(p.peer.GetID()) {
 			continue
 		}
 
@@ -115,7 +116,7 @@ func (p *EventBus) Send(oev *Event) error {
 		jsonCopy(oev, ev)
 
 		// attach sender id
-		ev.SenderID = p.peer.GetID()
+		ev.SenderID = string(p.peer.GetID())
 
 		// send the event to the peer
 		if err := p.send(re.PeerID, ev); err != nil {
@@ -149,7 +150,7 @@ func (p *EventBus) handle(ev *Event) error {
 		}
 		// we assume that we know about this
 		// TODO(geoah) Ack for our own stuff should probably happen when sending as well
-		if re, err := ev.GetRecipient(p.peer.GetID()); err == nil {
+		if re, err := ev.GetRecipient(string(p.peer.GetID())); err == nil {
 			// fmt.Printf("** Peer=%s: Setting peer=%s ack to true\n", p.ID, p.ID)
 			re.Ack = true
 		}
