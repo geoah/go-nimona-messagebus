@@ -12,22 +12,22 @@ import (
 )
 
 type EventBus struct {
-	protocolID string
-	peer       ps.Peer
-	network    net.Network
-	handlers   []func(ev *Event) error
-	events     map[string]*Event
-	streams    map[string]*mux.Stream
+	protocolID    string
+	peer          ps.Peer
+	network       net.Network
+	handlers      []func(ev *Event) error
+	handledEvents []string
+	streams       map[string]*mux.Stream
 }
 
 func New(protocolID string, network net.Network, peer ps.Peer) (*EventBus, error) {
 	eb := &EventBus{
-		protocolID: protocolID,
-		network:    network,
-		peer:       peer,
-		handlers:   []func(ev *Event) error{},
-		events:     map[string]*Event{},
-		streams:    map[string]*mux.Stream{},
+		protocolID:    protocolID,
+		network:       network,
+		peer:          peer,
+		handlers:      []func(ev *Event) error{},
+		handledEvents: []string{},
+		streams:       map[string]*mux.Stream{},
 	}
 	if err := network.HandleStream(protocolID, eb.streamHander); err != nil {
 		return nil, err
@@ -85,85 +85,44 @@ func (eb *EventBus) send(peerID string, ev *Event) error {
 }
 
 // Send takes an Event and will send it to its intended recipients
-func (p *EventBus) Send(oev *Event) error {
-	switch oev.Type {
-	case EventTypePDU:
-		// persist the PDU events we send
-		if _, ok := p.events[oev.ID]; !ok {
-			p.events[oev.ID] = oev
-		}
-	}
-
-	if re, err := oev.GetRecipient(string(p.peer.GetID())); err == nil {
-		re.Ack = true
-	}
-
+func (eb *EventBus) Send(ev *Event) error {
 	// go through all recipiends
-	for _, re := range oev.Recipients {
+	for _, pid := range ev.Recipients {
 		// don't send events to ourselves
-		if re.PeerID == string(p.peer.GetID()) {
+		if pid == string(eb.peer.GetID()) {
 			continue
 		}
-
-		// don't send events to peple who have already ACKed
-		if re.Ack == true {
-			continue
-		}
-
-		// since right now we do everything in memory, copy the
-		// event so we don't share it between the various peers
-		ev := &Event{}
-		jsonCopy(oev, ev)
 
 		// attach sender id
-		ev.SenderID = string(p.peer.GetID())
+		ev.SenderID = string(eb.peer.GetID())
 
 		// send the event to the peer
-		if err := p.send(re.PeerID, ev); err != nil {
+		if err := eb.send(pid, ev); err != nil {
 			fmt.Printf("! Could not send to peer: %s\n", err.Error())
 		}
 	}
+
 	return nil
 }
 
 // Handle an incoming event
-func (p *EventBus) handle(ev *Event) error {
-	// p.Lock()
-	// defer p.Unlock()
+func (eb *EventBus) handle(ev *Event) error {
+	// TODO event checking and adding are not thread safe
 
-	switch ev.Type {
-	// if the event is a PDU
-	case EventTypePDU:
-		if eev, ok := p.events[ev.ID]; ok {
-			if re, err := eev.GetRecipient(ev.SenderID); err == nil {
-				re.Ack = true
-			}
-			break
+	// check if we have already handled this event
+	for _, evID := range eb.handledEvents {
+		if evID == ev.ID {
+			return nil
 		}
-		// we assume the owner already knows about this
-		if re, err := ev.GetRecipient(ev.OwnerID); err == nil {
-			re.Ack = true
-		}
-		// we assume that the sender already knows about this
-		if re, err := ev.GetRecipient(ev.SenderID); err == nil {
-			re.Ack = true
-		}
-		// we assume that we know about this
-		// TODO(geoah) Ack for our own stuff should probably happen when sending as well
-		if re, err := ev.GetRecipient(string(p.peer.GetID())); err == nil {
-			// fmt.Printf("** Peer=%s: Setting peer=%s ack to true\n", p.ID, p.ID)
-			re.Ack = true
-		}
-
-		// persist the event
-		p.events[ev.ID] = ev
-
-		for _, h := range p.handlers {
-			h(ev)
-		}
-
-		// and finally send it
-		go p.Send(ev)
 	}
+
+	// else add to handled events
+	eb.handledEvents = append(eb.handledEvents, ev.ID)
+
+	// and trigger handlers
+	for _, h := range eb.handlers {
+		h(ev)
+	}
+
 	return nil
 }
