@@ -84,7 +84,7 @@ func eventHandler(ev *events.Event) error {
 	return nil
 }
 
-func newNode(port int, peerID string) (peerstore.Peer, peerstore.Peerstore, nimnet.Network, *events.EventBus, error) {
+func newNode(port int, peerID string) (peerstore.Peer, peerstore.Peerstore, nimnet.Network, events.EventBus, error) {
 	// create new peerstore
 	ps := peerstore.New()
 
