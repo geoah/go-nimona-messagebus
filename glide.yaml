@@ -1,0 +1,10 @@
+package: github.com/nimona/go-nimona-messagebus
+import:
+- package: github.com/golang/protobuf
+  subpackages:
+  - proto
+- package: github.com/nimona/go-nimona-mux
+- package: github.com/nimona/go-nimona-net
+- package: golang.org/x/crypto
+  subpackages:
+  - sha3
