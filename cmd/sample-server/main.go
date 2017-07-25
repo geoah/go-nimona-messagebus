@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	messagebus "github.com/nimona/go-nimona-messagebus"
+	mb "github.com/nimona/go-nimona-messagebus"
 	net "github.com/nimona/go-nimona-net"
 )
 
@@ -48,7 +48,7 @@ func main() {
 	}
 
 	// send a message to p2 from p1
-	payload := &messagebus.Payload{
+	payload := &mb.Payload{
 		Creator: p1.ID,
 		Type:    protocolID + "/message",
 		Data:    []byte("Hello!"),
@@ -58,7 +58,7 @@ func main() {
 	}
 
 	// send a message to p1 from p2
-	payload = &messagebus.Payload{
+	payload = &mb.Payload{
 		Creator: p2.ID,
 		Type:    protocolID + "echo",
 		Data:    []byte("Hi there!"),
@@ -71,7 +71,7 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 }
 
-func newNode(port int, peerID string, keyPath string) (*net.Peer, net.Network, messagebus.MessageBus, error) {
+func newNode(port int, peerID string, keyPath string) (*net.Peer, net.Network, mb.MessageBus, error) {
 	// create local peer
 	host := fmt.Sprintf("0.0.0.0:%d", port)
 	pr, err := net.NewPeerFromArmor(keyPath)
@@ -88,13 +88,13 @@ func newNode(port int, peerID string, keyPath string) (*net.Peer, net.Network, m
 		return nil, nil, nil, err
 	}
 
-	hn := func(hash []byte, msg *messagebus.Message) error {
+	hn := func(hash []byte, msg *mb.Message) error {
 		fmt.Printf("Peer %s received event hash=%x, signature=%x, payload=%s\n", peerID, hash, msg.Signature, string(msg.Payload))
 		return err
 	}
 
 	// initialize event bus
-	eb, err := messagebus.New(protocolID, mn, pr)
+	eb, err := mb.New(protocolID, mn, *pr)
 	if err != nil {
 		fmt.Println("Could not initialize event bus", err)
 	}

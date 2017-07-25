@@ -20,14 +20,14 @@ type MessageBus interface {
 
 type messageBus struct {
 	protocolID      string
-	peer            *net.Peer
+	peer            net.Peer
 	network         net.Network
 	handlers        []func(hash []byte, msg *Message) error
 	handledMessages []string
 	streams         map[string]*mux.Stream
 }
 
-func New(protocolID string, network net.Network, peer *net.Peer) (MessageBus, error) {
+func New(protocolID string, network net.Network, peer net.Peer) (MessageBus, error) {
 	eb := &messageBus{
 		protocolID:      protocolID,
 		network:         network,
