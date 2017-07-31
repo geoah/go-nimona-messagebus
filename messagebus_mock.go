@@ -8,11 +8,11 @@ type MockMessageBus struct {
 }
 
 // HandleMessage provides a mock function with given fields: handler
-func (_m *MockMessageBus) HandleMessage(handler func([]byte, *Message) error) error {
+func (_m *MockMessageBus) HandleMessage(handler func([]byte, Message) error) error {
 	ret := _m.Called(handler)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(func([]byte, *Message) error) error); ok {
+	if rf, ok := ret.Get(0).(func(func([]byte, Message) error) error); ok {
 		r0 = rf(handler)
 	} else {
 		r0 = ret.Error(0)

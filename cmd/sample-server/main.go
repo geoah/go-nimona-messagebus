@@ -88,8 +88,8 @@ func newNode(port int, peerID string, keyPath string) (*net.Peer, net.Network, m
 		return nil, nil, nil, err
 	}
 
-	hn := func(hash []byte, msg *mb.Message) error {
-		fmt.Printf("Peer %s received event hash=%x, signature=%x, payload=%s\n", peerID, hash, msg.Signature, string(msg.Payload))
+	hn := func(hash []byte, msg mb.Message) error {
+		fmt.Printf("Peer %s received event hash=%x, signature=%x, payload=%s\n", peerID, hash, msg.Signature, string(msg.PayloadRaw))
 		return err
 	}
 

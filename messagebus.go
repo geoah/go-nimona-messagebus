@@ -3,7 +3,6 @@ package messagebus
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 
@@ -14,7 +13,7 @@ import (
 )
 
 type MessageBus interface {
-	HandleMessage(handler func(hash []byte, msg *Message) error) error
+	HandleMessage(handler func(hash []byte, msg Message) error) error
 	Send(payload *Payload, peerIDs []string) error
 }
 
@@ -22,7 +21,7 @@ type messageBus struct {
 	protocolID      string
 	peer            net.Peer
 	network         net.Network
-	handlers        []func(hash []byte, msg *Message) error
+	handlers        []func(hash []byte, msg Message) error
 	handledMessages []string
 	streams         map[string]*mux.Stream
 }
@@ -32,7 +31,7 @@ func New(protocolID string, network net.Network, peer net.Peer) (MessageBus, err
 		protocolID:      protocolID,
 		network:         network,
 		peer:            peer,
-		handlers:        []func(hash []byte, msg *Message) error{},
+		handlers:        []func(hash []byte, msg Message) error{},
 		handledMessages: []string{},
 		streams:         map[string]*mux.Stream{},
 	}
@@ -42,7 +41,7 @@ func New(protocolID string, network net.Network, peer net.Peer) (MessageBus, err
 	return eb, nil
 }
 
-func (eb *messageBus) HandleMessage(handler func(hash []byte, msg *Message) error) error {
+func (eb *messageBus) HandleMessage(handler func(hash []byte, msg Message) error) error {
 	eb.handlers = append(eb.handlers, handler)
 	return nil
 }
@@ -54,14 +53,14 @@ func (eb *messageBus) streamHander(protocolID string, stream io.ReadWriteCloser)
 		// TODO replaces with proper stream decoder
 		line, err := sr.ReadString('\n')
 		if err != nil {
-			fmt.Println("Could not read")
-			return err // TODO(geoah) Return?
+			fmt.Println("Could not read") // TODO Fix logging
+			return err                    // TODO(geoah) Return?
 		}
 
 		// decode envelope
 		ev := &Envelope{}
 		if err := json.Unmarshal([]byte(line), &ev); err != nil {
-			fmt.Println("Could not decode envelope")
+			fmt.Println("Could not decode envelope") // TODO Fix logging
 			return err
 		}
 
@@ -69,38 +68,37 @@ func (eb *messageBus) streamHander(protocolID string, stream io.ReadWriteCloser)
 		// TODO verify hash
 
 		// decode message
-		msg := &Message{}
-		if err := json.Unmarshal(ev.Message, msg); err != nil {
-			fmt.Println("Could not decode message")
+		if err := json.Unmarshal(ev.MessageRaw, &ev.Message); err != nil {
+			fmt.Println("Could not decode message") // TODO Fix logging
 			return err
 		}
 
 		// decode payload
-		payload := &Payload{}
-		if err := json.Unmarshal([]byte(msg.Payload), &payload); err != nil {
-			fmt.Println("Could not decode payload")
+		if err := json.Unmarshal([]byte(ev.Message.PayloadRaw), &ev.Message.Payload); err != nil {
+			fmt.Println("Could not decode payload") // TODO Fix logging
 			return nil
 		}
 
 		// get creator
-		creator, err := eb.network.GetPeer(payload.Creator)
-		if err != nil {
-			// TODO attempt to retrieve creator and retry?
-			fmt.Println("Unknown creator")
-			return err
-		}
+		// TODO Make verification optional ena re-enable
+		// creator, err := eb.network.GetPeer(ev.Message.Payload.Creator)
+		// if err != nil {
+		// 	// TODO attempt to retrieve creator and retry?
+		// 	fmt.Println("Unknown creator")
+		// 	return err
+		// }
 
 		// verify signature
-		valid, err := creator.Verify(msg.Payload, msg.Signature)
-		if err != nil {
-			return err
-		}
-		if valid == false {
-			return errors.New("Invalid signature") // TODO Better error
-		}
+		// valid, err := creator.Verify(ev.Message.PayloadRaw, ev.Message.Signature)
+		// if err != nil {
+		// 	return err
+		// }
+		// if valid == false {
+		// 	return errors.New("Invalid signature") // TODO Better error
+		// }
 
 		// sent message to handlers
-		eb.handle(ev.Hash, msg)
+		eb.handle(ev.Hash, ev.Message)
 	}
 }
 
@@ -147,8 +145,8 @@ func (eb *messageBus) Send(payload *Payload, peerIDs []string) error {
 
 	// create signed message
 	msg := &Message{
-		Payload:   bpay,
-		Signature: spay,
+		PayloadRaw: bpay,
+		Signature:  spay,
 	}
 
 	// encode message
@@ -162,8 +160,8 @@ func (eb *messageBus) Send(payload *Payload, peerIDs []string) error {
 
 	// create envelope
 	ev := &Envelope{
-		Message: bmsg,
-		Hash:    shash[:],
+		MessageRaw: bmsg,
+		Hash:       shash[:],
 	}
 
 	// go through all recipiends
@@ -184,7 +182,7 @@ func (eb *messageBus) Send(payload *Payload, peerIDs []string) error {
 }
 
 // Handle an incoming event
-func (eb *messageBus) handle(hash []byte, msg *Message) error {
+func (eb *messageBus) handle(hash []byte, msg Message) error {
 	// TODO event checking and adding are not thread safe
 
 	// check if we have already handled this event
