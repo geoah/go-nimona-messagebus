@@ -6,10 +6,15 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/sirupsen/logrus"
+	smux "github.com/xtaci/smux"
 	sha3 "golang.org/x/crypto/sha3"
 
-	mux "github.com/nimona/go-nimona-mux"
 	net "github.com/nimona/go-nimona-net"
+)
+
+var (
+	logger = logrus.WithField("lib", "messagebus")
 )
 
 type MessageBus interface {
@@ -23,7 +28,7 @@ type messageBus struct {
 	network         net.Network
 	handlers        []func(hash []byte, msg Message) error
 	handledMessages []string
-	streams         map[string]*mux.Stream
+	streams         map[string]*smux.Stream
 }
 
 func New(protocolID string, network net.Network, peer net.Peer) (MessageBus, error) {
@@ -33,7 +38,7 @@ func New(protocolID string, network net.Network, peer net.Peer) (MessageBus, err
 		peer:            peer,
 		handlers:        []func(hash []byte, msg Message) error{},
 		handledMessages: []string{},
-		streams:         map[string]*mux.Stream{},
+		streams:         map[string]*smux.Stream{},
 	}
 	if err := network.RegisterStreamHandler(protocolID, eb.streamHander); err != nil {
 		return nil, err
@@ -53,9 +58,11 @@ func (eb *messageBus) streamHander(protocolID string, stream io.ReadWriteCloser)
 		// TODO replaces with proper stream decoder
 		line, err := sr.ReadString('\n')
 		if err != nil {
-			fmt.Println("Could not read") // TODO Fix logging
-			return err                    // TODO(geoah) Return?
+			logger.WithError(err).Errorf("Could not read")
+			return err // TODO(geoah) Return?
 		}
+
+		logger.WithField("line", line).Debugf("Got line")
 
 		// decode envelope
 		ev := &Envelope{}
@@ -102,15 +109,17 @@ func (eb *messageBus) streamHander(protocolID string, stream io.ReadWriteCloser)
 	}
 }
 
-func (eb *messageBus) getStream(peerID string) (*mux.Stream, error) {
+func (eb *messageBus) getStream(peerID string) (*smux.Stream, error) {
 	if stream, ok := eb.streams[peerID]; ok {
 		// TODO Check if stream is still ok
+		logger.Debugf("Found stream for peer %s", peerID)
 		return stream, nil
 	}
 	stream, err := eb.network.NewStream(eb.protocolID, peerID)
 	if err != nil {
 		return nil, err
 	}
+	logger.Debugf("Created new stream for peer %s", peerID)
 	eb.streams[peerID] = stream
 	return stream, nil
 }
@@ -123,9 +132,12 @@ func (eb *messageBus) send(ev *Envelope, peerID string) error {
 	}
 	evbs, _ := json.Marshal(ev)
 	evbs = append(evbs, '\n')
-	if _, err := stream.Write(evbs); err != nil {
+	n, err := stream.Write(evbs)
+	if err != nil {
 		return err
 	}
+
+	logger.WithField("evbs", string(evbs)).Debugf("Wrote envelope to peer %s (%d bytes)", peerID, n)
 	return nil
 }
 
@@ -138,15 +150,16 @@ func (eb *messageBus) Send(payload *Payload, peerIDs []string) error {
 	}
 
 	// sign message
-	spay, err := eb.peer.Sign(bpay)
-	if err != nil {
-		return err
-	}
+	// TODO Make signing optional and readd
+	// spay, err := eb.peer.Sign(bpay)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// create signed message
 	msg := &Message{
 		PayloadRaw: bpay,
-		Signature:  spay,
+		// Signature:  spay,
 	}
 
 	// encode message
@@ -171,10 +184,15 @@ func (eb *messageBus) Send(payload *Payload, peerIDs []string) error {
 			continue
 		}
 
+		logger.
+			WithField("type", payload.Type).
+			WithField("data", string(payload.Data)).
+			Infof("Sending message to %s", pid)
+
 		// send the event to the peer
 		if err := eb.send(ev, pid); err != nil {
 			// TODO Handle error
-			fmt.Printf("Could not send to peer: %s\n", err.Error())
+			logger.WithError(err).Warnf("Could not send to peer")
 		}
 	}
 
@@ -184,6 +202,8 @@ func (eb *messageBus) Send(payload *Payload, peerIDs []string) error {
 // Handle an incoming event
 func (eb *messageBus) handle(hash []byte, msg Message) error {
 	// TODO event checking and adding are not thread safe
+
+	fmt.Println("Handling message", string(msg.Payload.Type), string(msg.Payload.Data))
 
 	// check if we have already handled this event
 	shash := fmt.Sprintf("%x", hash)
