@@ -14,6 +14,7 @@ type Message struct {
 }
 
 type Envelope struct {
+	Recipipent string  `json:"-"`
 	Message    Message `json:"-"`
 	MessageRaw []byte  `json:"message,omitempty"`
 	Hash       []byte  `json:"hash,omitempty"`

@@ -6,17 +6,21 @@ import (
 	"log"
 	"time"
 
+	logrus "github.com/sirupsen/logrus"
+
 	mb "github.com/nimona/go-nimona-messagebus"
 	net "github.com/nimona/go-nimona-net"
 )
 
 const (
-	protocolID = "/echo/v0"
+	protocolID = "echo"
 )
 
 var addr = flag.String("addr", ":2180", "echo service address")
 
 func main() {
+	logrus.SetLevel(logrus.DebugLevel)
+
 	n1Port := 2160
 	n1PeerID := "n1"
 
@@ -73,16 +77,16 @@ func main() {
 
 func newNode(port int, peerID string, keyPath string) (*net.Peer, net.Network, mb.MessageBus, error) {
 	// create local peer
-	host := fmt.Sprintf("0.0.0.0:%d", port)
-	pr, err := net.NewPeerFromArmor(keyPath)
+	// host := fmt.Sprintf("0.0.0.0:%d", port)
+	pr, err := net.NewPeerFromArmorFile(keyPath)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	pr.Addresses = append(pr.Addresses, host)
+	// pr.Addresses = append(pr.Addresses, host)
 
 	// initialize network
-	mn, err := net.NewTCPNetwork(pr)
+	mn, err := net.NewNetwork(pr, port)
 	if err != nil {
 		fmt.Println("Could not initialize network", err)
 		return nil, nil, nil, err
@@ -94,7 +98,7 @@ func newNode(port int, peerID string, keyPath string) (*net.Peer, net.Network, m
 	}
 
 	// initialize event bus
-	eb, err := mb.New(protocolID, mn, *pr)
+	eb, err := mb.New(protocolID, mn)
 	if err != nil {
 		fmt.Println("Could not initialize event bus", err)
 	}
